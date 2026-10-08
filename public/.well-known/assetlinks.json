@@ -1,0 +1,36 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.run.asia_southeast1.ais_pre_47sgepddpti6gm3ltqnsrh_558617189645.twa",
+      "sha256_cert_fingerprints": [
+        "5D:42:9A:A5:22:0C:6B:EE:14:F3:5D:EB:96:E8:25:E6:F4:FA:3F:97:3B:A9:47:B8:C8:82:0B:8E:80:2B:52:92",
+        "50:24:41:DB:18:E8:D9:45:9A:92:3C:DB:58:84:EB:39:6A:87:1E:08:28:3A:10:E2:25:2E:82:F7:08:6E:98:96"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.shishudose.pediatric",
+      "sha256_cert_fingerprints": [
+        "5D:42:9A:A5:22:0C:6B:EE:14:F3:5D:EB:96:E8:25:E6:F4:FA:3F:97:3B:A9:47:B8:C8:82:0B:8E:80:2B:52:92",
+        "50:24:41:DB:18:E8:D9:45:9A:92:3C:DB:58:84:EB:39:6A:87:1E:08:28:3A:10:E2:25:2E:82:F7:08:6E:98:96",
+        "A1:96:9F:C3:10:47:20:91:9D:C1:1A:F4:51:55:18:EB:E3:EA:B8:92:4F:F8:80:14:D6:93:3B:7B:68:EB:17:05"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.shishudose.pediatric.app",
+      "sha256_cert_fingerprints": [
+        "5D:42:9A:A5:22:0C:6B:EE:14:F3:5D:EB:96:E8:25:E6:F4:FA:3F:97:3B:A9:47:B8:C8:82:0B:8E:80:2B:52:92",
+        "50:24:41:DB:18:E8:D9:45:9A:92:3C:DB:58:84:EB:39:6A:87:1E:08:28:3A:10:E2:25:2E:82:F7:08:6E:98:96"
+      ]
+    }
+  }
+]

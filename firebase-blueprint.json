@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered doctor profile with BMDC license verification and subscription device locking record",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Doctor's name or display name",
+          "maxLength": 100
+        },
+        "bmdcRegNumber": {
+          "type": "string",
+          "description": "BMDC (Bangladesh Medical & Dental Council) official registration number",
+          "maxLength": 50
+        },
+        "designation": {
+          "type": "string",
+          "description": "Doctor designation/degrees (e.g. MBBS, FCPS, DCH)",
+          "maxLength": 100
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Avatar photo URL",
+          "maxLength": 1000
+        },
+        "isSubscribed": {
+          "type": "boolean",
+          "description": "Whether the user has an active subscription license"
+        },
+        "subscriptionPlan": {
+          "type": "string",
+          "description": "monthly or yearly subscription plan",
+          "enum": ["monthly", "yearly", "admin_lifetime", "none"]
+        },
+        "subscriptionExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when current subscription expires"
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Unique device identifier from browser localStorage to enforce 1-device access policy",
+          "maxLength": 128
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the user's latest login"
+        },
+        "registeredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the account creation"
+        }
+      },
+      "required": ["userId", "email", "isSubscribed", "deviceId"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "bKash subscription verification request submitted by a doctor with BMDC registration number",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Unique payment submission ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Auth UID of the applicant doctor"
+        },
+        "doctorName": {
+          "type": "string",
+          "description": "Doctor full name"
+        },
+        "doctorEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Doctor account email"
+        },
+        "bmdcRegNumber": {
+          "type": "string",
+          "description": "BMDC Registration number for doctor identity verification",
+          "maxLength": 50
+        },
+        "plan": {
+          "type": "string",
+          "enum": ["monthly", "yearly"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in BDT (100, 1000, 350, or 3000)"
+        },
+        "senderNumber": {
+          "type": "string",
+          "description": "bKash wallet number used to send money"
+        },
+        "transactionId": {
+          "type": "string",
+          "description": "bKash Transaction ID (TrxID)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["requestId", "userId", "plan", "amount", "senderNumber", "transactionId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile with BMDC number, subscription status and single device restriction ID"
+    },
+    "/payment_requests/{requestId}": {
+      "schema": "PaymentRequest",
+      "description": "bKash subscription payment verification requests with BMDC verification"
+    }
+  }
+}

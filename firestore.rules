@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened helper primitives
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'oly.em10@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 254 &&
+             data.isSubscribed is bool &&
+             data.deviceId is string && data.deviceId.size() <= 128 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('bmdcRegNumber' in data) || (data.bmdcRegNumber is string && data.bmdcRegNumber.size() <= 50)) &&
+             (!('designation' in data) || (data.designation is string && data.designation.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!('subscriptionPlan' in data) || (data.subscriptionPlan in ['monthly', 'yearly', 'admin_lifetime', 'none'])) &&
+             (!('subscriptionExpiresAt' in data) || true) &&
+             (!('updatedAt' in data) || true);
+    }
+
+    function isValidPayment(data) {
+      return data.requestId is string && data.requestId.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.plan in ['monthly', 'yearly'] &&
+             data.amount is number && data.amount > 0 && data.amount <= 50000 &&
+             data.senderNumber is string && data.senderNumber.size() <= 30 &&
+             data.transactionId is string && data.transactionId.size() <= 60 &&
+             (!('bmdcRegNumber' in data) || (data.bmdcRegNumber is string && data.bmdcRegNumber.size() <= 50)) &&
+             (!('doctorName' in data) || (data.doctorName is string && data.doctorName.size() <= 150)) &&
+             (!('doctorEmail' in data) || (data.doctorEmail is string && data.doctorEmail.size() <= 254)) &&
+             (!('createdAt' in data) || true) &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    // Health check / connection test collection
+    match /test/{testId} {
+      allow get: if true;
+    }
+
+    // Users collection: single-device tracking and subscription check
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() && 
+                    isOwner(userId) && 
+                    isValidId(userId) && 
+                    isValidUser(incoming()) && 
+                    incoming().userId == request.auth.uid &&
+                    (isAdmin() || incoming().isSubscribed == false);
+
+      allow update: if isSignedIn() && 
+                    isValidId(userId) && 
+                    isValidUser(incoming()) && (
+                      isAdmin() ||
+                      (
+                        isOwner(userId) &&
+                        // Disallow non-admin user from granting themselves subscription
+                        incoming().isSubscribed == existing().isSubscribed &&
+                        incoming().userId == existing().userId &&
+                        incoming().email == existing().email &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['deviceId', 'displayName', 'photoURL', 'lastLoginAt', 'subscriptionPlan', 'bmdcRegNumber', 'designation', 'updatedAt'])
+                      )
+                    );
+
+      allow delete: if isAdmin();
+    }
+
+    // Payment requests collection for bKash manual verification
+    match /payment_requests/{requestId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      
+      allow create: if isValidId(requestId) && 
+                    incoming().status == 'pending' && 
+                    isValidPayment(incoming()) &&
+                    (isSignedIn() ? incoming().userId == request.auth.uid : (incoming().userId is string && incoming().userId.size() <= 128));
+
+      allow update: if isSignedIn() && isAdmin();
+      allow delete: if isSignedIn() && isAdmin();
+    }
+  }
+}

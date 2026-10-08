@@ -1,0 +1,8 @@
+{
+  "name": "ShishuDose BD - Pediatric Dosing & Clinical Guidelines",
+  "description": "Pediatric drug dosage calculator, emergency protocols, and offline clinical guidelines tailored for doctors in Bangladesh with locally approved DGDA formulations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
