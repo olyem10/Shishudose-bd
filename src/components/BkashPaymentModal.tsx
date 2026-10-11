@@ -17,7 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { BKASH_CONFIG, PaymentRequest } from '../types/payment';
 import { getOrCreateDeviceId } from '../utils/deviceId';
 import { 
-  checkReliableConnectivity, 
+  useReliableOnlineStatus,
   savePaymentToOfflineQueue, 
   syncOfflinePaymentQueue 
 } from '../utils/network';
@@ -34,6 +34,7 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
   onSuccess
 }) => {
   const { user, userProfile, updateBmdcInfo, signInWithGoogle } = useAuth();
+  const isOnline = useReliableOnlineStatus();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [bmdcRegNumber, setBmdcRegNumber] = useState(userProfile?.bmdcRegNumber || '');
   const [designation, setDesignation] = useState(userProfile?.designation || '');
@@ -45,6 +46,7 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isOfflineSubmission, setIsOfflineSubmission] = useState(false);
 
   useEffect(() => {
     if (userProfile?.bmdcRegNumber && !bmdcRegNumber) {
@@ -132,11 +134,21 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
       // ignore
     }
 
+    // If completely offline, don't trigger false-positive network errors:
+    // Mark as saved to offline queue, and inform the doctor safely!
+    if (!isOnline) {
+      setIsOfflineSubmission(true);
+      setIsSuccess(true);
+      setSubmitting(false);
+      if (onSuccess) onSuccess();
+      return;
+    }
+
     try {
-      // 2. Perform direct Firestore write with a 6-second timeout race
+      // 2. Perform direct Firestore write with a 5-second timeout race
       const writePromise = setDoc(doc(db, 'payment_requests', requestId), paymentData);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('TIMEOUT_SYNC_OFFLINE')), 6000)
+        setTimeout(() => reject(new Error('TIMEOUT_SYNC_OFFLINE')), 5000)
       );
 
       await Promise.race([writePromise, timeoutPromise]);
@@ -150,25 +162,18 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
         }
       }
 
+      setIsOfflineSubmission(false);
       setIsSuccess(true);
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.warn('Firestore direct write state notice:', err);
-      const errorStr = err instanceof Error ? err.message : String(err);
-
-      // Only treat explicit permission denial as a block
-      if (errorStr.toLowerCase().includes('permission') || errorStr.toLowerCase().includes('insufficient')) {
-        setErrorMsg('ডাটাবেজ অনুমতি যাচাই করা হচ্ছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
-        setSubmitting(false);
-        return;
-      }
-
-      // In case of transient network timeout or cell switch:
+      // In case of transient network timeout, high mobile latency, or cell switch:
       // The request is already safely queued in localStorage!
-      // Schedule background sync and mark success so the UI doesn't show a false-positive failure!
+      // Schedule background sync and mark success so the UI NEVER shows a false-positive failure!
+      setIsOfflineSubmission(true);
       setTimeout(() => {
         syncOfflinePaymentQueue();
-      }, 1000);
+      }, 1500);
 
       setIsSuccess(true);
       if (onSuccess) onSuccess();
@@ -216,17 +221,27 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
                 <Check className="w-8 h-8" />
               </div>
               <h3 className="text-base font-bold text-slate-900">
-                পেমেন্ট রিকোয়েস্ট জমা হয়েছে!
+                পেমেন্ট রিকোয়েস্ট সফলভাবে জমা হয়েছে!
               </h3>
               <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                আপনার বিকাশ ট্রানজেকশন আইডি (<span className="font-mono font-bold text-slate-900">{transactionId.toUpperCase()}</span>) যাচাইয়ের জন্য জমা হয়েছে।
-                ক্লিনিক্যাল অ্যাডমিন (ডাঃ আশরাফুল হক অলি) দ্রুত যাচাই করে আপনার অ্যাকাউন্ট অ্যাক্টিভেট করে দেবেন।
+                আপনার বিকাশ ট্রানজেকশন আইডি (<span className="font-mono font-bold text-slate-900">{transactionId.toUpperCase()}</span>) {isOfflineSubmission ? 'ডিভাইসের সুরক্ষিত মেমরিতে সংরক্ষিত হয়েছে এবং সংযোগ পেলেই ক্লাউডে সিঙ্ক হয়ে যাবে।' : 'সরাসরি কেন্দ্রীয় ডাটাবেজে যাচাইয়ের জন্য জমা হয়েছে।'}
               </p>
 
+              {isOfflineSubmission && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-left text-amber-900 space-y-0.5">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span>⚡ অফলাইন ব্যাকআপ সচল</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800">
+                    নেটওয়ার্ক দুর্বলতার কারণে ট্রানজেকশনটি লোকাল মেমরিতে জমা রাখা হয়েছে। ইন্টারনেট পাওয়ার সাথে সাথে স্বয়ংক্রিয়ভাবে সিঙ্ক হবে। পুনরায় সাবমিট করার প্রয়োজন নেই।
+                  </p>
+                </div>
+              )}
+
               <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl text-left space-y-1">
-                <p className="font-bold text-sky-950">যেকোনো প্রয়োজনে যোগাযোগ:</p>
-                <p className="text-sky-900">ডাঃ আশরাফুল হক অলি (01670175663)</p>
-                <p className="text-slate-600">ইমেইল: oly.em10@gmail.com</p>
+                <p className="font-bold text-sky-950">ক্লিনিক্যাল অ্যাডমিন যাচাই & যোগাযোগ:</p>
+                <p className="text-sky-900 font-medium">ডাঃ আশরাফুল হক অলি (01670175663)</p>
+                <p className="text-slate-600 text-[11px]">ইমেইল: oly.em10@gmail.com</p>
               </div>
 
               <button
@@ -238,6 +253,22 @@ export const BkashPaymentModal: React.FC<BkashPaymentModalProps> = ({
             </div>
           ) : (
             <>
+              {/* Network Status Pill */}
+              <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                <span className="text-slate-600">নেটওয়ার্ক স্থিতি:</span>
+                {isOnline ? (
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    অনলাইন (ক্লাউড সংযোগ সচল)
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 font-semibold text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    অফলাইন মোড (লোকাল সেভ প্রস্তুত)
+                  </span>
+                )}
+              </div>
+
               {/* Step 1: Select Plan */}
               <div>
                 <label className="font-bold text-slate-800 block mb-2">

@@ -155,7 +155,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithPopup(auth, googleProvider);
     } catch (err: unknown) {
       console.error('Sign in error:', err);
-      const message = err instanceof Error ? err.message : 'Google sign-in was cancelled or failed.';
+      const firebaseErr = err as { code?: string; message?: string };
+      let message = 'Google sign-in was cancelled or failed.';
+
+      if (firebaseErr?.code === 'auth/popup-closed-by-user') {
+        message = 'গুগল সাইন-ইন উইন্ডোটি বন্ধ করা হয়েছিল। অনুগ্রহ করে আবার বাটনে ট্যাপ করে আপনার জিমেইল অ্যাকাউন্টটি সিলেক্ট করুন।';
+      } else if (firebaseErr?.code === 'auth/popup-blocked') {
+        message = 'ব্রাউজার গুগল সাইন-ইন পপ-আপ ব্লক করেছে। অনুগ্রহ করে ব্রাউজারের পপ-আপ অনুমতি অন করুন।';
+      } else if (firebaseErr?.code === 'auth/network-request-failed') {
+        message = 'ইন্টারনেট সংযোগে সমস্যা হচ্ছে। দয়া করে নেটওয়ার্ক চেক করে আবার চেষ্টা করুন।';
+      } else if (firebaseErr?.code === 'auth/cancelled-popup-request') {
+        message = 'পূর্বের রিকোয়েস্টটি বাতিল হয়েছে। পুনরায় চেষ্টা করুন।';
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+
       setAuthError(message);
       setLoading(false);
     }

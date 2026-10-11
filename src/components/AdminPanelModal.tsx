@@ -3,6 +3,7 @@ import {
   collection, 
   getDocs, 
   doc, 
+  setDoc,
   updateDoc, 
   serverTimestamp,
   query,
@@ -145,16 +146,38 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
         reviewedAt: serverTimestamp()
       });
 
-      // 2. Activate Doctor subscription in users collection
-      await updateDoc(doc(db, 'users', payReq.userId), {
+      // 2. Activate Doctor subscription in users collection (setDoc with merge so guest submissions activate smoothly)
+      await setDoc(doc(db, 'users', payReq.userId), {
+        userId: payReq.userId,
+        email: payReq.doctorEmail || '',
+        displayName: payReq.doctorName || 'Doctor',
+        bmdcRegNumber: payReq.bmdcRegNumber || '',
         isSubscribed: true,
         subscriptionPlan: payReq.plan,
         subscriptionExpiresAt: expiresAt,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
 
       setPaymentsList(prev => prev.map(p => p.requestId === payReq.requestId ? { ...p, status: 'approved' } : p));
-      setUsersList(prev => prev.map(u => u.userId === payReq.userId ? { ...u, isSubscribed: true } : u));
+      setUsersList(prev => {
+        const exists = prev.some(u => u.userId === payReq.userId);
+        if (exists) {
+          return prev.map(u => u.userId === payReq.userId ? { ...u, isSubscribed: true } : u);
+        }
+        return [
+          {
+            userId: payReq.userId,
+            email: payReq.doctorEmail || '',
+            displayName: payReq.doctorName || 'Doctor',
+            bmdcRegNumber: payReq.bmdcRegNumber,
+            isSubscribed: true,
+            subscriptionPlan: payReq.plan,
+            subscriptionExpiresAt: expiresAt,
+            deviceId: ''
+          },
+          ...prev
+        ];
+      });
       setNotification(`পেমেন্ট অনুমোদিত! ${payReq.doctorName}-এর ${payReq.plan === 'yearly' ? '১ বছর' : '১ মাস'}-এর সাবস্ক্রিপশন চালু হয়েছে।`);
       setTimeout(() => setNotification(null), 4500);
     } catch (err) {

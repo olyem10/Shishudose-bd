@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { doc, setDoc, getDocFromServer, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { PaymentRequest } from '../types/payment';
 
@@ -8,50 +8,63 @@ const PAYMENT_QUEUE_KEY = 'shishudose_payment_offline_queue_v1';
 /**
  * Checks if the device has a real, functioning internet connection.
  * Bypasses false-positive `navigator.onLine` issues in webviews and Android TWAs.
+ * Features strict 2.5s timeouts to prevent UI hangs.
  */
 export async function checkReliableConnectivity(): Promise<boolean> {
-  // If navigator clearly says offline, double-check with a lightweight ping
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  // If navigator in browser unambiguously reports online, do a quick verification
+  const navOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // Lightweight probe to verify actual internet access
+  const fetchProbe = async (): Promise<boolean> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
       const res = await fetch('/manifest.json?_t=' + Date.now(), {
         method: 'HEAD',
         cache: 'no-store',
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      return res.ok;
+      return res.ok || res.status === 304;
     } catch {
       return false;
     }
-  }
+  };
 
-  // If navigator says online, verify with a rapid fetch ping
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch('/manifest.json?_t=' + Date.now(), {
-      method: 'HEAD',
-      cache: 'no-store',
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return res.ok || res.status === 304;
-  } catch {
-    // If local fetch fails, try Firestore test collection
+  // Firestore server probe
+  const firestoreProbe = async (): Promise<boolean> => {
     try {
-      await getDocFromServer(doc(db, 'test', 'ping'));
+      const pingPromise = getDocFromServer(doc(db, 'test', 'ping'));
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT')), 2500)
+      );
+      await Promise.race([pingPromise, timeoutPromise]);
       return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message.toLowerCase() : '';
-      if (msg.includes('offline') || msg.includes('unavailable')) {
+      if (msg.includes('timeout') || msg.includes('offline') || msg.includes('unavailable') || msg.includes('network')) {
         return false;
       }
-      // Permission denied or not-found still proves network connectivity to Google servers!
+      // Permission denied or document-not-found means we reached Google Firebase servers!
       return true;
     }
+  };
+
+  // Run probes
+  const [fetchResult, firestoreResult] = await Promise.allSettled([
+    fetchProbe(),
+    firestoreProbe()
+  ]);
+
+  const fetchSuccess = fetchResult.status === 'fulfilled' && fetchResult.value;
+  const firestoreSuccess = firestoreResult.status === 'fulfilled' && firestoreResult.value;
+
+  if (fetchSuccess || firestoreSuccess) {
+    return true;
   }
+
+  // If both probes failed, rely on navigator.onLine as conservative fallback
+  return navOnline;
 }
 
 /**
@@ -71,12 +84,12 @@ export function useReliableOnlineStatus(): boolean {
     };
 
     const handleOnline = () => {
-      setIsOnline(true);
+      if (isMounted) setIsOnline(true);
       verify();
     };
 
     const handleOffline = () => {
-      // Don't immediately assume false in webviews, verify first
+      // Don't immediately assume false in mobile webviews, verify first
       verify();
     };
 
@@ -97,16 +110,39 @@ export function useReliableOnlineStatus(): boolean {
 }
 
 /**
+ * Serializable offline payment object representation
+ */
+export interface QueuedPaymentItem extends Omit<PaymentRequest, 'createdAt'> {
+  createdAtMs: number;
+}
+
+/**
  * Offline Payment Queue: Stores payment requests safely in localStorage
  * so that no doctor's submission or TrxID is ever lost.
+ * Ensures clean serialization (never saving raw FieldValue symbols).
  */
 export function savePaymentToOfflineQueue(payment: PaymentRequest): void {
   try {
     const queue = getOfflinePaymentQueue();
-    // Prevent duplicate entries
-    const exists = queue.some(p => p.requestId === payment.requestId || p.transactionId === payment.transactionId);
+    // Prevent duplicate entries by requestId or transactionId
+    const exists = queue.some(
+      p => p.requestId === payment.requestId || p.transactionId === payment.transactionId
+    );
     if (!exists) {
-      queue.push(payment);
+      const cleanItem: QueuedPaymentItem = {
+        requestId: payment.requestId,
+        userId: payment.userId,
+        doctorName: payment.doctorName,
+        doctorEmail: payment.doctorEmail,
+        bmdcRegNumber: payment.bmdcRegNumber,
+        plan: payment.plan,
+        amount: payment.amount,
+        senderNumber: payment.senderNumber,
+        transactionId: payment.transactionId,
+        status: 'pending',
+        createdAtMs: Date.now()
+      };
+      queue.push(cleanItem);
       localStorage.setItem(PAYMENT_QUEUE_KEY, JSON.stringify(queue));
     }
   } catch (err) {
@@ -114,11 +150,11 @@ export function savePaymentToOfflineQueue(payment: PaymentRequest): void {
   }
 }
 
-export function getOfflinePaymentQueue(): PaymentRequest[] {
+export function getOfflinePaymentQueue(): QueuedPaymentItem[] {
   try {
     const raw = localStorage.getItem(PAYMENT_QUEUE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as PaymentRequest[];
+    return JSON.parse(raw) as QueuedPaymentItem[];
   } catch {
     return [];
   }
@@ -134,6 +170,10 @@ export function removePaymentFromOfflineQueue(requestId: string): void {
   }
 }
 
+export function hasPendingOfflinePayments(): boolean {
+  return getOfflinePaymentQueue().length > 0;
+}
+
 /**
  * Syncs any pending queued payments to Firestore once network connectivity is restored.
  */
@@ -144,11 +184,20 @@ export async function syncOfflinePaymentQueue(): Promise<number> {
   let syncedCount = 0;
   for (const item of queue) {
     try {
-      await setDoc(doc(db, 'payment_requests', item.requestId), {
-        ...item,
+      const { createdAtMs, ...rest } = item;
+      const writePromise = setDoc(doc(db, 'payment_requests', item.requestId), {
+        ...rest,
         status: 'pending',
-        syncedFromOffline: true
+        createdAt: serverTimestamp(),
+        syncedFromOffline: true,
+        offlineSubmittedAt: new Date(createdAtMs).toISOString()
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('SYNC_TIMEOUT')), 5000)
+      );
+
+      await Promise.race([writePromise, timeoutPromise]);
       removePaymentFromOfflineQueue(item.requestId);
       syncedCount++;
     } catch (err) {
@@ -167,3 +216,4 @@ if (typeof window !== 'undefined') {
     }, 2000);
   });
 }
+

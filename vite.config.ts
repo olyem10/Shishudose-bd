@@ -20,7 +20,7 @@ export default defineConfig(() => {
           theme_color: '#0284c7',
           background_color: '#0f172a',
           display: 'standalone',
-          display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+          display_override: ['standalone', 'minimal-ui'],
           orientation: 'portrait-primary',
           categories: ['medical', 'health', 'productivity', 'utilities'],
           dir: 'ltr',
@@ -42,16 +42,22 @@ export default defineConfig(() => {
           ],
           icons: [
             {
-              src: 'https://i.ibb.co.com/Z66670g4/launchericon-512x512.png',
+              src: '/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: 'https://i.ibb.co.com/Z66670g4/launchericon-512x512.png',
+              src: '/pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
+            },
+            {
+              src: '/pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
             },
           ],
           screenshots: [

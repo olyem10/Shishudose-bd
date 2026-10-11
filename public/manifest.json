@@ -8,7 +8,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "theme_color": "#0284c7",
   "background_color": "#0f172a",
@@ -18,8 +18,23 @@
   "related_applications": [
     {
       "platform": "play",
+      "id": "com.shishudose.pediatric",
+      "url": "https://play.google.com/store/apps/details?id=com.shishudose.pediatric"
+    },
+    {
+      "platform": "play",
       "id": "com.shishudose.pediatric.app",
       "url": "https://play.google.com/store/apps/details?id=com.shishudose.pediatric.app"
+    },
+    {
+      "platform": "play",
+      "id": "com.shishudosebd.app",
+      "url": "https://play.google.com/store/apps/details?id=com.shishudosebd.app"
+    },
+    {
+      "platform": "play",
+      "id": "com.shishudoshbd.twa",
+      "url": "https://play.google.com/store/apps/details?id=com.shishudoshbd.twa"
     }
   ],
   "scope_extensions": [
@@ -56,16 +71,22 @@
   },
   "icons": [
     {
-      "src": "https://i.ibb.co.com/Z66670g4/launchericon-512x512.png",
+      "src": "/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://i.ibb.co.com/Z66670g4/launchericon-512x512.png",
+      "src": "/pwa-maskable-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "screenshots": [

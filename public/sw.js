@@ -1,6 +1,6 @@
 // ShishuDose BD - Production Service Worker
 // Grounded in WHO IMCI, DGDA & ICDDR,B Offline Protocols
-const CACHE_NAME = 'shishudose-cache-v3';
+const CACHE_NAME = 'shishudose-cache-v4-update';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

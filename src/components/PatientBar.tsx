@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { PatientProfile } from '../types/pediatric';
 import { estimateWeightFromAge, calculateBSA } from '../utils/calculator';
-import { User, Calculator, AlertCircle, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { User, Calculator, AlertCircle, ChevronDown, ChevronUp, RotateCcw, TrendingUp } from 'lucide-react';
 
 interface PatientBarProps {
   patient: PatientProfile;
   onChange: (updated: PatientProfile) => void;
+  onOpenGrowthChart?: () => void;
 }
 
-export const PatientBar: React.FC<PatientBarProps> = ({ patient, onChange }) => {
+export const PatientBar: React.FC<PatientBarProps> = ({ patient, onChange, onOpenGrowthChart }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const totalMonths = patient.ageYears * 12 + patient.ageMonths;
@@ -155,6 +156,34 @@ export const PatientBar: React.FC<PatientBarProps> = ({ patient, onChange }) => 
               )}
             </div>
 
+            {/* Gender Selector */}
+            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-lg p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => onChange({ ...patient, gender: 'male' })}
+                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                  patient.gender === 'male'
+                    ? 'bg-sky-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="ছেলে (Male / Boy)"
+              >
+                👦 Boy
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ ...patient, gender: 'female' })}
+                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                  patient.gender === 'female'
+                    ? 'bg-rose-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="মেয়ে (Female / Girl)"
+              >
+                👧 Girl
+              </button>
+            </div>
+
             {/* Quick Estimator Trigger */}
             <button
               onClick={applyEstimatedWeight}
@@ -201,6 +230,18 @@ export const PatientBar: React.FC<PatientBarProps> = ({ patient, onChange }) => 
               <span>BSA: {patient.bsaM2 || 0.45} m²</span>
               {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
+
+            {onOpenGrowthChart && (
+              <button
+                type="button"
+                onClick={onOpenGrowthChart}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition-colors shadow-2xs whitespace-nowrap"
+                title="WHO বৃদ্ধি ও গ্রোথ চার্ট খুলুন"
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                <span>WHO গ্রোথ চার্ট 📊</span>
+              </button>
+            )}
           </div>
         </div>
 
